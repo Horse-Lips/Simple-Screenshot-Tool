@@ -1,9 +1,13 @@
-use std::error::Error;
-use std::fs;
-use std::path::PathBuf;
+use std::{
+    error::Error,
+    fs,
+    path::PathBuf,
+    rc::Rc,
+};
 use arboard::{Clipboard, ImageData};
 use chrono::Local;
 use dirs::picture_dir;
+use pixels::{Pixels, SurfaceTexture};
 use screenshots::Screen;
 use winit::{
     dpi::PhysicalPosition,
@@ -21,9 +25,20 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         .with_fullscreen(Some(Fullscreen::Borderless(None)))
         .build(&event_loop)?;
 
+    let window = Rc::new(window);
+    let window_clone = window.clone();
+
+    let mut pixels = {
+        let size = window_clone.inner_size();
+        let surface = SurfaceTexture::new(size.width, size.height, &*window_clone);
+        Pixels::new(size.width, size.height, surface).expect("Failed to create pixels instance")
+    };
+
     let mut is_dragging = false;
     let mut drag_start: Option<PhysicalPosition<f64>> = None;
     let mut drag_end: Option<PhysicalPosition<f64>> = None;
+
+    window.request_redraw();
 
     event_loop.run(move |event, event_loop_wt| {
         match event {
@@ -75,6 +90,16 @@ fn main() -> Result<(), winit::error::EventLoopError> {
                 }
                 WindowEvent::CloseRequested => {    // Handle closing window manually
                     event_loop_wt.exit();
+                }
+                WindowEvent::RedrawRequested => {
+                    let frame = pixels.frame_mut();
+                    for chunk in frame.chunks_exact_mut(4) {
+                        chunk[0] = 0;
+                        chunk[1] = 0;
+                        chunk[2] = 0;
+                        chunk[3] = 0;
+                    }
+                    pixels.render().expect("Failed to render dim overlay");
                 }
                 _ => {}
             },
