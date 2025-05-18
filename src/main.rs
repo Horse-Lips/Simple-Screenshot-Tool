@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
+use arboard::{Clipboard, ImageData};
 use chrono::Local;
 use dirs::picture_dir;
 use screenshots::Screen;
@@ -92,7 +93,9 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf
         .ok_or("No screen found")?;
 
     // Capture rectangle
-    let img = screen.capture_area(x, y, width, height);
+    let img = screen.capture_area(x, y, width, height)?;
+    let img_save = img.clone();
+    let img_raw = img.into_raw();
 
     // Prepare out dir
     let mut out = picture_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -102,7 +105,15 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf
     // Save with timestamp
     let filename = format!("screenshot_{}.png", Local::now().format("%Y%m%d_%H%M%S"));
     let path = out.join(filename);
-    img?.save(&path)?;
+    img_save.save(&path)?;
+
+    // Copy raw to clipboard
+    let mut clipboard = Clipboard::new()?;
+    clipboard.set_image(ImageData {
+        width: width as usize,
+        height: height as usize,
+        bytes: std::borrow::Cow::Owned(img_raw),
+    })?;
 
     Ok(path)
 }
