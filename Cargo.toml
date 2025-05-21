@@ -3,9 +3,14 @@ name = "SimpleScreenshotTool"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+opt-level = "z" # Optimise for binary size with no loop vectorisation ~200kb
+lto = true  # link time optimisation across all crates ~600kb
+debug = false   # No debug info
+
 [dependencies]
 winit = "0.29"  # Transparent overlay and input
 screenshots = "0.8.10"  # Capturing screen data
 arboard = "3.5.0"   # Clipboard
-chrono = "0.4.41"   # Timestamps
+time = { version = "0.3.41", features = ["local-offset"] }   # Timestamps
 dirs = "6.0.0"  # Find pictures directory
