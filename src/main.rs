@@ -1,25 +1,16 @@
 #![windows_subsystem = "windows"]   // Don't show terminal
 
-use std::{
-    error::Error,
-    fs,
-    path::PathBuf,
-};
 use std::rc::Rc;
-use arboard::{
-    Clipboard,
-    ImageData,
-};
+use pixels::{Pixels, SurfaceTexture};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, Event, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{WindowBuilder, Fullscreen},
+    window::{Fullscreen, WindowBuilder},
 };
-use time::OffsetDateTime;
-use dirs::picture_dir;
-use screenshots::Screen;
-use pixels::{Pixels, SurfaceTexture};
+
+mod capture;
+mod draw;
 
 fn main() -> Result<(), winit::error::EventLoopError> {
     let event_loop = EventLoop::new()
@@ -60,7 +51,7 @@ fn main() -> Result<(), winit::error::EventLoopError> {
 
                                     let x = start.x.min(end.x);
                                     let y = start.y.min(end.y);
-                                    let _path = capture_region( //Should log this
+                                    let _path = capture::capture_region(
                                         x as i32,
                                         y as i32,
                                         (start.x.max(end.x) - x) as u32,
@@ -86,7 +77,7 @@ fn main() -> Result<(), winit::error::EventLoopError> {
                 }
                 WindowEvent::RedrawRequested => {
                     if let (Some(start), Some(end)) = (drag_start, drag_end) {
-                        draw_rect(pixels.frame_mut(), size.width, start, end);
+                        draw::draw_rect(pixels.frame_mut(), size.width, start, end);
 
                         if pixels.render().is_err() {
                             event_loop_wt.exit();
@@ -102,76 +93,4 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         }
         event_loop_wt.set_control_flow(ControlFlow::Wait);
     })
-}
-
-fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf, Box<dyn Error>> {
-    // Grab primary screen
-    let screen = Screen::all()
-        .expect("Failed to get screen")
-        .into_iter()
-        .next()
-        .ok_or("Failed to get screen")
-        .expect("Failed to get screen");
-
-    // Capture rectangle
-    let img = screen.capture_area(x, y, width, height).expect("Failed to capture image.");
-    let img_save = img.clone();
-    let img_raw = img.into_raw();
-
-    // Prepare out dir
-    let mut out = picture_dir().unwrap_or_else(|| PathBuf::from("."));
-    out.push("SimpleScreenshotTool");
-    fs::create_dir_all(&out).expect("Failed to create output directory.");
-
-    // Save with timestamp
-    let now = OffsetDateTime::now_local().unwrap();
-
-    let filename = format!(
-        "screenshot_{:04}{:02}{:02}_{:02}{:02}{:02}.png",
-        now.year(),
-        now.month(),
-        now.day(),
-        now.hour(),
-        now.minute(),
-        now.second()
-    );
-    let path = out.join(filename);
-    img_save.save(&path).expect("Failed to save image.");
-
-    // Copy raw to clipboard
-    let mut clipboard = Clipboard::new().expect("Failed to get clipboard");
-    clipboard.set_image(ImageData {
-        width: width as usize,
-        height: height as usize,
-        bytes: std::borrow::Cow::Owned(img_raw),
-    }).expect("Failed to copy image to clipboard");
-
-    Ok(path)
-}
-
-fn draw_rect(frame: &mut [u8], width: u32, start: PhysicalPosition<f64>, end: PhysicalPosition<f64>) {
-    for chunk in frame.chunks_exact_mut(4) {
-        chunk.copy_from_slice(&[0, 0, 0, 0]);   //Clear frame
-    }
-
-    let (x_min, x_max) = (start.x.min(end.x) as u32, start.x.max(end.x) as u32);
-    let (y_min, y_max) = (start.y.min(end.y) as u32, start.y.max(end.y) as u32);
-
-    for x in x_min..=x_max {
-        draw_line(frame, width, x, y_min);
-        draw_line(frame, width, x, y_max);
-    }
-
-    for y in y_min..=y_max {
-        draw_line(frame, width, x_min, y);
-        draw_line(frame, width, x_max, y);
-    }
-}
-
-fn draw_line(frame: &mut [u8], width: u32, x: u32, y: u32) {
-    let colour = [255, 0, 0, 255];
-    let idx = ((y * width + x) * 4) as usize;
-    if idx <= frame.len() {
-        frame[idx..idx + 4].copy_from_slice(&colour);
-    }
 }
