@@ -38,11 +38,11 @@ fn main() -> Result<(), winit::error::EventLoopError> {
 
                                     let x = start.x.min(end.x);
                                     let y = start.y.min(end.y);
-                                    let _path = capture::capture_region( //Should log this
-                                                                         x as i32,
-                                                                         y as i32,
-                                                                         (start.x.max(end.x) - x) as u32,
-                                                                         (start.y.max(end.y) - y) as u32
+                                    let _path = capture::capture_region(
+                                        x as i32,
+                                        y as i32,
+                                        (start.x.max(end.x) - x) as u32,
+                                        (start.y.max(end.y) - y) as u32
                                     );
                                 }
                                 drag_start = None;
