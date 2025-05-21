@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]   // Don't show terminal
+
 use std::{
     error::Error,
     fs,
@@ -13,7 +15,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{WindowBuilder, Fullscreen},
 };
-use chrono::Local;
+use time::OffsetDateTime;
 use dirs::picture_dir;
 use screenshots::Screen;
 
@@ -47,7 +49,7 @@ fn main() -> Result<(), winit::error::EventLoopError> {
 
                                     let x = start.x.min(end.x);
                                     let y = start.y.min(end.y);
-                                    let path = capture_region(
+                                    let _path = capture_region( //Should log this
                                         x as i32,
                                         y as i32,
                                         (start.x.max(end.x) - x) as u32,
@@ -101,7 +103,17 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf
     fs::create_dir_all(&out).expect("Failed to create output directory.");
 
     // Save with timestamp
-    let filename = format!("screenshot_{}.png", Local::now().format("%Y%m%d_%H%M%S"));
+    let now = OffsetDateTime::now_local().unwrap();
+
+    let filename = format!(
+        "screenshot_{:04}{:02}{:02}_{:02}{:02}{:02}.png",
+        now.year(),
+        now.month(),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second()
+    );
     let path = out.join(filename);
     img_save.save(&path).expect("Failed to save image.");
 
