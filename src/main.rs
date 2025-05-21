@@ -5,6 +5,7 @@ use std::{
     fs,
     path::PathBuf,
 };
+use std::rc::Rc;
 use arboard::{
     Clipboard,
     ImageData,
@@ -18,6 +19,7 @@ use winit::{
 use time::OffsetDateTime;
 use dirs::picture_dir;
 use screenshots::Screen;
+use pixels::{Pixels, SurfaceTexture};
 
 fn main() -> Result<(), winit::error::EventLoopError> {
     let event_loop = EventLoop::new()
@@ -28,6 +30,15 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         .with_fullscreen(Some(Fullscreen::Borderless(None)))
         .build(&event_loop)
         .expect("Failed to create window.");
+
+    let window = Rc::new(window);
+    let window_clone = window.clone();
+    let size = window.inner_size();
+
+    let mut pixels = {
+        let surface = SurfaceTexture::new(size.width, size.height, &*window_clone);
+        Pixels::new(size.width, size.height, surface).expect("Failed to create pixels instance")
+    };
 
     let mut is_dragging = false;
     let mut drag_start: Option<PhysicalPosition<f64>> = None;
@@ -70,6 +81,16 @@ fn main() -> Result<(), winit::error::EventLoopError> {
                             drag_start = Some(position);
                         }
                         drag_end = Some(position);
+                        window.request_redraw();
+                    }
+                }
+                WindowEvent::RedrawRequested => {
+                    if let (Some(start), Some(end)) = (drag_start, drag_end) {
+                        draw_rect(pixels.frame_mut(), size.width, start, end);
+
+                        if pixels.render().is_err() {
+                            event_loop_wt.exit();
+                        }
                     }
                 }
                 WindowEvent::CloseRequested => {
@@ -83,7 +104,7 @@ fn main() -> Result<(), winit::error::EventLoopError> {
     })
 }
 
-pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf, Box<dyn Error>> {
+fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf, Box<dyn Error>> {
     // Grab primary screen
     let screen = Screen::all()
         .expect("Failed to get screen")
@@ -126,4 +147,31 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf
     }).expect("Failed to copy image to clipboard");
 
     Ok(path)
+}
+
+fn draw_rect(frame: &mut [u8], width: u32, start: PhysicalPosition<f64>, end: PhysicalPosition<f64>) {
+    for chunk in frame.chunks_exact_mut(4) {
+        chunk.copy_from_slice(&[0, 0, 0, 0]);   //Clear frame
+    }
+
+    let (x_min, x_max) = (start.x.min(end.x) as u32, start.x.max(end.x) as u32);
+    let (y_min, y_max) = (start.y.min(end.y) as u32, start.y.max(end.y) as u32);
+
+    for x in x_min..=x_max {
+        draw_line(frame, width, x, y_min);
+        draw_line(frame, width, x, y_max);
+    }
+
+    for y in y_min..=y_max {
+        draw_line(frame, width, x_min, y);
+        draw_line(frame, width, x_max, y);
+    }
+}
+
+fn draw_line(frame: &mut [u8], width: u32, x: u32, y: u32) {
+    let colour = [255, 0, 0, 255];
+    let idx = ((y * width + x) * 4) as usize;
+    if idx <= frame.len() {
+        frame[idx..idx + 4].copy_from_slice(&colour);
+    }
 }
