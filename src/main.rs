@@ -1,23 +1,12 @@
 #![windows_subsystem = "windows"]   // Don't show terminal
 
-use std::{
-    error::Error,
-    fs,
-    path::PathBuf,
-};
-use arboard::{
-    Clipboard,
-    ImageData,
-};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, Event, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{WindowBuilder, Fullscreen},
+    window::{Fullscreen, WindowBuilder},
 };
-use time::OffsetDateTime;
-use dirs::picture_dir;
-use screenshots::Screen;
+mod capture;
 
 fn main() -> Result<(), winit::error::EventLoopError> {
     let event_loop = EventLoop::new()
@@ -49,11 +38,11 @@ fn main() -> Result<(), winit::error::EventLoopError> {
 
                                     let x = start.x.min(end.x);
                                     let y = start.y.min(end.y);
-                                    let _path = capture_region( //Should log this
-                                        x as i32,
-                                        y as i32,
-                                        (start.x.max(end.x) - x) as u32,
-                                        (start.y.max(end.y) - y) as u32
+                                    let _path = capture::capture_region( //Should log this
+                                                                         x as i32,
+                                                                         y as i32,
+                                                                         (start.x.max(end.x) - x) as u32,
+                                                                         (start.y.max(end.y) - y) as u32
                                     );
                                 }
                                 drag_start = None;
@@ -81,49 +70,4 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         }
         event_loop_wt.set_control_flow(ControlFlow::Wait);
     })
-}
-
-pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf, Box<dyn Error>> {
-    // Grab primary screen
-    let screen = Screen::all()
-        .expect("Failed to get screen")
-        .into_iter()
-        .next()
-        .ok_or("Failed to get screen")
-        .expect("Failed to get screen");
-
-    // Capture rectangle
-    let img = screen.capture_area(x, y, width, height).expect("Failed to capture image.");
-    let img_save = img.clone();
-    let img_raw = img.into_raw();
-
-    // Prepare out dir
-    let mut out = picture_dir().unwrap_or_else(|| PathBuf::from("."));
-    out.push("SimpleScreenshotTool");
-    fs::create_dir_all(&out).expect("Failed to create output directory.");
-
-    // Save with timestamp
-    let now = OffsetDateTime::now_local().unwrap();
-
-    let filename = format!(
-        "screenshot_{:04}{:02}{:02}_{:02}{:02}{:02}.png",
-        now.year(),
-        now.month(),
-        now.day(),
-        now.hour(),
-        now.minute(),
-        now.second()
-    );
-    let path = out.join(filename);
-    img_save.save(&path).expect("Failed to save image.");
-
-    // Copy raw to clipboard
-    let mut clipboard = Clipboard::new().expect("Failed to get clipboard");
-    clipboard.set_image(ImageData {
-        width: width as usize,
-        height: height as usize,
-        bytes: std::borrow::Cow::Owned(img_raw),
-    }).expect("Failed to copy image to clipboard");
-
-    Ok(path)
 }
