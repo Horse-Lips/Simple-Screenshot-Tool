@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]   // Don't show terminal
 
-use minifb::{Key, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
+use minifb::{CursorStyle, Key, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
 use winit::{
     event_loop::{EventLoop},
     window::{Fullscreen, WindowBuilder},
@@ -34,11 +34,12 @@ fn main() {
             topmost: true,
             transparency: true,
             none: false,
-
         },
     ).unwrap_or_else(|e| {
         panic!("Failed to create window: {}", e);
     });
+
+    window.set_cursor_style(CursorStyle::Crosshair);
 
     let buffer_dim = vec![0x88000000; width * height];
     let buffer_clear = vec![0x00000000; width * height];
