@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]   // Don't show terminal
 
-use minifb::{CursorStyle, Key, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
+use minifb::{Key, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
 use winit::{
     event_loop::{EventLoop},
     window::{Fullscreen, WindowBuilder},
@@ -39,9 +39,7 @@ fn main() {
         panic!("Failed to create window: {}", e);
     });
 
-    window.set_cursor_style(CursorStyle::Crosshair);
-
-    let buffer_dim = vec![0x88000000; width * height];
+    let mut buffer_dim = vec![0x88000000; width * height];
     let buffer_clear = vec![0x00000000; width * height];
 
     let mut is_dragging = false;
@@ -61,6 +59,24 @@ fn main() {
 
             if left_pressed && is_dragging {    // Mouse moved while left mouse pressed
                 drag_end = Some((x, y));
+
+                buffer_dim.fill(0x88000000);    // Required to make transparent selection smaller
+
+                if let (Some((start_x, start_y)), Some((end_x, end_y))) = (drag_start, drag_end) {
+                    let x = start_x.min(end_x) as usize;
+                    let y = start_y.min(end_y) as usize;
+                    let w = start_x.max(end_x) as usize - x;
+                    let h = start_y.max(end_y) as usize - y;
+
+                    for i in y..(y + h) {
+                        for j in x..(x + w) {
+                            let index = i * width + j;
+                            if index < buffer_dim.len() {
+                                buffer_dim[index] = 0x00000000;  // Make selection transparent
+                            }
+                        }
+                    }
+                }
             }
 
             if !left_pressed && is_dragging {   // Left mouse released
@@ -72,7 +88,7 @@ fn main() {
                     let w = (start_x.max(end_x) - x) as u32;
                     let h = (start_y.max(end_y) - y) as u32;
 
-                    window.update_with_buffer(&buffer_clear, width, height).unwrap();   // Set window transparent for screenshot
+                    window.update_with_buffer(&buffer_clear, width, height).unwrap();   // Set whole window transparent for screenshot
 
                     let _path = capture::capture_region(x as i32, y as i32, w, h);
                     break;
