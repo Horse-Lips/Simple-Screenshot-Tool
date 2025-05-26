@@ -1,73 +1,103 @@
 #![windows_subsystem = "windows"]   // Don't show terminal
 
+use minifb::{Key, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
 use winit::{
-    dpi::PhysicalPosition,
-    event::{ElementState, Event, MouseButton, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{EventLoop},
     window::{Fullscreen, WindowBuilder},
 };
+
 mod capture;
 
-fn main() -> Result<(), winit::error::EventLoopError> {
+fn main() {
     let event_loop = EventLoop::new()
         .expect("Failed to create event loop"); // Create event loop
     let window = WindowBuilder::new()   // Create window
-        .with_title("Simple Screenshot Tool")
-        .with_transparent(true)
         .with_fullscreen(Some(Fullscreen::Borderless(None)))
         .build(&event_loop)
         .expect("Failed to create window.");
 
+    let width = window.outer_size().width as usize; // Still need winit to get width/height
+    let height = window.outer_size().height as usize;
+
+    event_loop.exit();
+
+    let mut window = Window::new(
+        "Simple Screenshot Tool",
+        width,
+        height,
+        WindowOptions {
+            borderless: true,
+            title: false,
+            resize: true,
+            scale: Scale::X1,
+            scale_mode: ScaleMode::Stretch,
+            topmost: true,
+            transparency: true,
+            none: false,
+        },
+    ).unwrap_or_else(|e| {
+        panic!("Failed to create window: {}", e);
+    });
+
+    let mut buffer_dim = vec![0x88000000; width * height];
+    let buffer_clear = vec![0x00000000; width * height];
+
     let mut is_dragging = false;
-    let mut drag_start: Option<PhysicalPosition<f64>> = None;
-    let mut drag_end: Option<PhysicalPosition<f64>> = None;
+    let mut drag_start: Option<(f32, f32)> = None;
+    let mut drag_end: Option<(f32, f32)> = None;
 
-    event_loop.run(move |event, event_loop_wt| {
-        match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::MouseInput { state, button, .. } => {
-                    if button == MouseButton::Left {
-                        match state {
-                            ElementState::Pressed => {  // Handle left mouse button pressed
-                                is_dragging = true;
-                            }
-                            ElementState::Released => { // Handle left mouse button released
-                                is_dragging = false;
-                                if let (Some(start), Some(end)) = (drag_start, drag_end) {
-                                    window.set_visible(false); //Should probably make this actually click through or not drawn, etc.
+    while window.is_open() {
+        window.update_with_buffer(&buffer_dim, width, height).unwrap();
 
-                                    let x = start.x.min(end.x);
-                                    let y = start.y.min(end.y);
-                                    let _path = capture::capture_region(
-                                        x as i32,
-                                        y as i32,
-                                        (start.x.max(end.x) - x) as u32,
-                                        (start.y.max(end.y) - y) as u32
-                                    );
-                                }
-                                drag_start = None;
-                                drag_end = None;
+        if let Some((x, y)) = window.get_mouse_pos(MouseMode::Clamp) {  // Clamp mouse coords within window
+            let left_pressed = window.get_mouse_down(MouseButton::Left);
 
-                                event_loop_wt.exit();
+            if left_pressed && !is_dragging {   // Left mouse pressed
+                is_dragging = true;
+                drag_start = Some((x, y));
+            }
+
+            if left_pressed && is_dragging {    // Mouse moved while left mouse pressed
+                drag_end = Some((x, y));
+
+                buffer_dim.fill(0x88000000);    // Required to make transparent selection smaller
+
+                if let (Some((start_x, start_y)), Some((end_x, end_y))) = (drag_start, drag_end) {
+                    let x = start_x.min(end_x) as usize;
+                    let y = start_y.min(end_y) as usize;
+                    let w = start_x.max(end_x) as usize - x;
+                    let h = start_y.max(end_y) as usize - y;
+
+                    for i in y..(y + h) {
+                        for j in x..(x + w) {
+                            let index = i * width + j;
+                            if index < buffer_dim.len() {
+                                buffer_dim[index] = 0x00000000;  // Make selection transparent
                             }
                         }
                     }
                 }
-                WindowEvent::CursorMoved { position, .. } => {
-                    if is_dragging {    // Handle cursor movement when clicking and dragging
-                        if drag_start.is_none() {
-                            drag_start = Some(position);
-                        }
-                        drag_end = Some(position);
-                    }
+            }
+
+            if !left_pressed && is_dragging {   // Left mouse released
+                is_dragging = false;
+
+                if let (Some((start_x, start_y)), Some((end_x, end_y))) = (drag_start, drag_end) {
+                    let x = start_x.min(end_x);
+                    let y = start_y.min(end_y);
+                    let w = (start_x.max(end_x) - x) as u32;
+                    let h = (start_y.max(end_y) - y) as u32;
+
+                    window.update_with_buffer(&buffer_clear, width, height).unwrap();   // Set whole window transparent for screenshot
+
+                    let _path = capture::capture_region(x as i32, y as i32, w, h);
+                    break;
                 }
-                WindowEvent::CloseRequested => {
-                    event_loop_wt.exit();   // Handle closing window manually
-                }
-                _ => {}
-            },
-            _ => {}
+            }
         }
-        event_loop_wt.set_control_flow(ControlFlow::Wait);
-    })
+
+        if window.is_key_down(Key::Escape) {
+            break;
+        }
+    }
 }

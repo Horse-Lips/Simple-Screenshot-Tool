@@ -9,7 +9,8 @@ lto = true  # link time optimisation across all crates ~600kb
 debug = false   # No debug info
 
 [dependencies]
-winit = "0.29"  # Transparent overlay and input
+winit = "0.29"  # Used to get window size only
+minifb = "0.28.0"   # Transparent overlay and input
 screenshots = "0.8.10"  # Capturing screen data
 arboard = "3.5.0"   # Clipboard
 time = { version = "0.3.41", features = ["local-offset"] }   # Timestamps
